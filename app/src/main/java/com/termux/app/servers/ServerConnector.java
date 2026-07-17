@@ -78,6 +78,8 @@ public class ServerConnector {
 
         // Base ssh flags (shared by ssh and the mosh --ssh wrapper).
         StringBuilder sshFlags = new StringBuilder("ssh");
+        sshFlags.append(" -o StrictHostKeyChecking=accept-new"); // never hang on first-connect host-key prompt
+        sshFlags.append(" -o ServerAliveInterval=30");           // keep-alive so links over Tailscale don't idle-die
         if (server.keyPath != null && !server.keyPath.isEmpty()) {
             sshFlags.append(" -i ").append(shellQuote(server.keyPath));
         }
