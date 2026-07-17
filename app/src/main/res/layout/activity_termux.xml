@@ -69,6 +69,159 @@
                     android:longClickable="true" />
 
                 <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="10dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp">
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/termuxy_command_center_title"
+                        android:textStyle="bold"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingBottom="6dp"
+                        android:text="@string/termuxy_command_center_subtitle"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/servers_button"
+                        style="?android:attr/buttonBarButtonStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/action_servers" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/voice_mode_button"
+                        style="?android:attr/buttonBarButtonStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/action_voice_mode" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/agent_prompt_button"
+                        style="?android:attr/buttonBarButtonStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/action_agent_prompt" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/coding_mode_button"
+                        style="?android:attr/buttonBarButtonStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/action_start_coding_mode" />
+
+                    <LinearLayout
+                        style="?android:attr/buttonBarStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/tmux_prefix_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_tmux_prefix" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/tmux_split_vertical_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_tmux_split_vertical" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/tmux_split_horizontal_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_tmux_split_horizontal" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/tmux_new_window_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_tmux_new_window" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/tmux_choose_session_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_tmux_choose_session" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        style="?android:attr/buttonBarStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/agent_approve_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_agent_approve" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/agent_deny_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_agent_deny" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/agent_escape_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_agent_escape" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/agent_interrupt_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
+                            android:text="@string/action_agent_interrupt" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/repair_packages_button"
+                        style="?android:attr/buttonBarButtonStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/action_repair_packages" />
+                </LinearLayout>
+
+                <LinearLayout
                     style="?android:attr/buttonBarStyle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -93,6 +246,18 @@
             </LinearLayout>
 
         </androidx.drawerlayout.widget.DrawerLayout>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/agent_prompt_fab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentBottom="true"
+            android:layout_margin="18dp"
+            android:layout_marginBottom="56dp"
+            android:contentDescription="@string/action_agent_prompt"
+            android:src="@drawable/ic_mic"
+            app:tint="@android:color/white" />
 
         <androidx.viewpager.widget.ViewPager
             android:id="@+id/terminal_toolbar_view_pager"

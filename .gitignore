@@ -37,3 +37,6 @@ local.properties
 .swp
 ehthumbs.db
 Thumbs.db
+
+# Reference forks (external open-source projects analyzed for comparison)
+/reference/

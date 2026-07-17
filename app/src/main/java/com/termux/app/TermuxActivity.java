@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.net.Uri;
@@ -46,6 +47,10 @@ import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.io.TerminalToolbarViewPager;
 import com.termux.app.terminal.TermuxTerminalViewClient;
+import com.termux.app.servers.ServersDialog;
+import com.termux.app.terminal.io.TermuxVoiceInput;
+import com.termux.app.voice.VoiceModeController;
+import com.termux.app.terminal.io.TermuxyCodingMode;
 import com.termux.shared.termux.extrakeys.ExtraKeysView;
 import com.termux.shared.termux.interact.TextInputDialogUtils;
 import com.termux.shared.logger.Logger;
@@ -134,6 +139,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     TermuxTerminalExtraKeys mTermuxTerminalExtraKeys;
 
     /**
+     * Native speech-to-text input for the terminal toolbar text input view.
+     */
+    TermuxVoiceInput mTermuxVoiceInput;
+
+    /**
+     * Mobile coding workspace and tmux controls.
+     */
+    TermuxyCodingMode mTermuxyCodingMode;
+    VoiceModeController mVoiceModeController;
+
+    /**
      * The termux sessions list controller.
      */
     TermuxSessionsListViewController mTermuxSessionListViewController;
@@ -158,6 +174,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * If onResume() was called after onCreate().
      */
     private boolean mIsOnResumeAfterOnCreate = false;
+
+    /**
+     * If Termuxy shell autoheal was injected into the foreground session for this activity instance.
+     */
+    private boolean mDidInjectTermuxyAutoheal;
 
     /**
      * If activity was restarted like due to call to {@link #recreate()} after receiving
@@ -251,6 +272,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setToggleKeyboardView();
 
+        setCodingModeView();
+
         registerForContextMenu(mTerminalView);
 
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this);
@@ -315,6 +338,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onResume();
 
+        if (mTermuxService != null)
+            TermuxInstaller.repairExistingBootstrapIfNeeded();
+
+        injectTermuxyAutohealIfNeeded();
+
         // Check if a crash happened on last run of the app or if a plugin crashed and show a
         // notification with the crash details if it did
         TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG);
@@ -358,6 +386,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mTermuxService = null;
         }
 
+        if (mTermuxVoiceInput != null)
+            mTermuxVoiceInput.destroy();
+
+        if (mVoiceModeController != null)
+            mVoiceModeController.destroy();
+
         try {
             unbindService(this);
         } catch (Exception e) {
@@ -388,6 +422,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Logger.logDebug(LOG_TAG, "onServiceConnected");
 
         mTermuxService = ((TermuxService.LocalBinder) service).service;
+
+        TermuxInstaller.repairExistingBootstrapIfNeeded();
 
         setTermuxSessionsListView();
 
@@ -427,6 +463,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         // Update the {@link TerminalSession} and {@link TerminalEmulator} clients.
         mTermuxService.setTermuxTerminalSessionClient(mTermuxTerminalSessionActivityClient);
+
+        injectTermuxyAutohealIfNeeded();
     }
 
     @Override
@@ -440,6 +478,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
 
 
+
+
+    private void injectTermuxyAutohealIfNeeded() {
+        if (mDidInjectTermuxyAutoheal || mTermuxyCodingMode == null || mTerminalView == null) return;
+
+        mDidInjectTermuxyAutoheal = true;
+        mTerminalView.postDelayed(() -> {
+            if (mTermuxyCodingMode != null)
+                mTermuxyCodingMode.installPackageAutoheal();
+        }, 750);
+    }
 
 
     private void reloadProperties() {
@@ -495,6 +544,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onCreate();
+
+        mTermuxVoiceInput = new TermuxVoiceInput(this);
+        mTermuxyCodingMode = new TermuxyCodingMode(this);
+        mVoiceModeController = new VoiceModeController(this);
     }
 
     private void setTermuxSessionsListView() {
@@ -549,6 +602,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // Focus the text input view if just revealed.
             findViewById(R.id.terminal_toolbar_text_input).requestFocus();
         }
+
+        injectTermuxyAutohealIfNeeded();
     }
 
     private void saveTerminalToolbarTextInput(Bundle savedInstanceState) {
@@ -592,6 +647,33 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             toggleTerminalToolbar();
             return true;
         });
+    }
+
+    private void setCodingModeView() {
+        findViewById(R.id.servers_button).setOnClickListener(v -> new ServersDialog(TermuxActivity.this).show());
+        findViewById(R.id.voice_mode_button).setOnClickListener(v -> {
+            if (mVoiceModeController != null) mVoiceModeController.toggle();
+        });
+        findViewById(R.id.coding_mode_button).setOnClickListener(v -> {
+            mTermuxyCodingMode.startCodingWorkspace();
+            getDrawer().closeDrawers();
+        });
+        findViewById(R.id.agent_prompt_button).setOnClickListener(v -> mTermuxyCodingMode.showAgentPromptDialog());
+        findViewById(R.id.agent_prompt_fab).setOnClickListener(v -> mTermuxyCodingMode.showAgentPromptDialog());
+        findViewById(R.id.agent_prompt_fab).setOnLongClickListener(v -> {
+            if (mVoiceModeController != null) mVoiceModeController.toggle();
+            return true;
+        });
+        findViewById(R.id.repair_packages_button).setOnClickListener(v -> repairTermuxyPackageManager());
+        findViewById(R.id.tmux_prefix_button).setOnClickListener(v -> mTermuxyCodingMode.sendTmuxPrefix());
+        findViewById(R.id.tmux_split_vertical_button).setOnClickListener(v -> mTermuxyCodingMode.splitVertical());
+        findViewById(R.id.tmux_split_horizontal_button).setOnClickListener(v -> mTermuxyCodingMode.splitHorizontal());
+        findViewById(R.id.tmux_new_window_button).setOnClickListener(v -> mTermuxyCodingMode.newWindow());
+        findViewById(R.id.tmux_choose_session_button).setOnClickListener(v -> mTermuxyCodingMode.chooseSession());
+        findViewById(R.id.agent_approve_button).setOnClickListener(v -> mTermuxyCodingMode.sendApprove());
+        findViewById(R.id.agent_deny_button).setOnClickListener(v -> mTermuxyCodingMode.sendDeny());
+        findViewById(R.id.agent_escape_button).setOnClickListener(v -> mTermuxyCodingMode.sendEscape());
+        findViewById(R.id.agent_interrupt_button).setOnClickListener(v -> mTermuxyCodingMode.sendInterrupt());
     }
 
 
@@ -802,6 +884,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         Logger.logVerbose(LOG_TAG, "onRequestPermissionsResult: requestCode: " + requestCode + ", permissions: "  + Arrays.toString(permissions) + ", grantResults: "  + Arrays.toString(grantResults));
+        if (mTermuxVoiceInput != null && mTermuxVoiceInput.onRequestPermissionsResult(requestCode, grantResults)) {
+            return;
+        }
+
+        if (mVoiceModeController != null && mVoiceModeController.onPermissionResult(
+                grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+            return;
+        }
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
             requestStoragePermission(true);
         }
@@ -827,6 +917,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public TermuxTerminalExtraKeys getTermuxTerminalExtraKeys() {
         return mTermuxTerminalExtraKeys;
+    }
+
+    public TermuxyCodingMode getTermuxyCodingMode() {
+        return mTermuxyCodingMode;
+    }
+
+    public TermuxVoiceInput getTermuxVoiceInput() {
+        return mTermuxVoiceInput;
+    }
+
+    public void repairTermuxyPackageManager() {
+        if (TermuxInstaller.repairExistingBootstrapIfNeeded()) {
+            Logger.showToast(this, getString(R.string.msg_package_manager_repaired), false);
+        } else {
+            Logger.showToast(this, getString(R.string.msg_package_manager_repair_failed), true);
+        }
     }
 
     public void setExtraKeysView(ExtraKeysView extraKeysView) {

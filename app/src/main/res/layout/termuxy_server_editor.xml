@@ -1,0 +1,82 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <EditText
+            android:id="@+id/server_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/termuxy_servers_hint_name"
+            android:inputType="text"
+            android:autofillHints=""
+            tools:ignore="LabelFor" />
+
+        <EditText
+            android:id="@+id/server_user"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/termuxy_servers_hint_user"
+            android:inputType="text"
+            android:autofillHints=""
+            tools:ignore="LabelFor" />
+
+        <EditText
+            android:id="@+id/server_host"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/termuxy_servers_hint_host"
+            android:inputType="textUri"
+            android:autofillHints=""
+            tools:ignore="LabelFor" />
+
+        <EditText
+            android:id="@+id/server_port"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/termuxy_servers_hint_port"
+            android:inputType="number"
+            android:autofillHints=""
+            tools:ignore="LabelFor" />
+
+        <EditText
+            android:id="@+id/server_key"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/termuxy_servers_hint_key"
+            android:inputType="textUri"
+            android:autofillHints=""
+            tools:ignore="LabelFor" />
+
+        <EditText
+            android:id="@+id/server_password"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/termuxy_servers_hint_password"
+            android:inputType="textPassword"
+            android:autofillHints="" />
+
+        <EditText
+            android:id="@+id/server_tmux"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/termuxy_servers_hint_tmux"
+            android:inputType="text"
+            android:autofillHints=""
+            tools:ignore="LabelFor" />
+
+        <CheckBox
+            android:id="@+id/server_mosh"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/termuxy_servers_hint_mosh" />
+
+    </LinearLayout>
+</ScrollView>

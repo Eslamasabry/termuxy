@@ -25,9 +25,12 @@ import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -60,6 +63,8 @@ import static com.termux.shared.termux.TermuxConstants.TERMUX_STAGING_PREFIX_DIR
 final class TermuxInstaller {
 
     private static final String LOG_TAG = "TermuxInstaller";
+    private static final String DEFAULT_TERMUX_PACKAGE_NAME = "com.termux";
+    private static final String DEFAULT_TERMUX_DATA_DIR_PATH = "/data/data/" + DEFAULT_TERMUX_PACKAGE_NAME;
 
     /** Performs bootstrap setup if necessary. */
     static void setupBootstrapIfNeeded(final Activity activity, final Runnable whenDone) {
@@ -106,7 +111,15 @@ final class TermuxInstaller {
         if (FileUtils.directoryFileExists(TERMUX_PREFIX_DIR_PATH, true)) {
             if (TermuxFileUtils.isTermuxPrefixDirectoryEmpty()) {
                 Logger.logInfo(LOG_TAG, "The termux prefix directory \"" + TERMUX_PREFIX_DIR_PATH + "\" exists but is empty or only contains specific unimportant files.");
+            } else if (!isInstalledBootstrapCompatible()) {
+                Logger.logInfo(LOG_TAG, "The termux prefix directory \"" + TERMUX_PREFIX_DIR_PATH + "\" exists but was installed with incompatible bootstrap paths. Attempting in-place repair.");
+                if (repairExistingBootstrapIfNeeded() && isInstalledBootstrapCompatible()) {
+                    whenDone.run();
+                    return;
+                }
+                Logger.logInfo(LOG_TAG, "In-place repair failed. Reinstalling bootstrap.");
             } else {
+                repairExistingBootstrapIfNeeded();
                 whenDone.run();
                 return;
             }
@@ -167,7 +180,7 @@ final class TermuxInstaller {
                                     String[] parts = line.split("←");
                                     if (parts.length != 2)
                                         throw new RuntimeException("Malformed symlink line: " + line);
-                                    String oldPath = parts[0];
+                                    String oldPath = patchBootstrapPath(parts[0]);
                                     String newPath = TERMUX_STAGING_PREFIX_DIR_PATH + "/" + parts[1];
                                     symlinks.add(Pair.create(oldPath, newPath));
 
@@ -194,6 +207,7 @@ final class TermuxInstaller {
                                         while ((readBytes = zipInput.read(buffer)) != -1)
                                             outStream.write(buffer, 0, readBytes);
                                     }
+                                    patchBootstrapFile(targetFile);
                                     if (zipEntryName.startsWith("bin/") || zipEntryName.startsWith("libexec") ||
                                         zipEntryName.startsWith("lib/apt/apt-helper") || zipEntryName.startsWith("lib/apt/methods")) {
                                         //noinspection OctalInteger
@@ -206,6 +220,7 @@ final class TermuxInstaller {
 
                     if (symlinks.isEmpty())
                         throw new RuntimeException("No SYMLINKS.txt encountered");
+                    installDpkgWrapperIfNeeded(TERMUX_STAGING_PREFIX_DIR);
                     for (Pair<String, String> symlink : symlinks) {
                         Os.symlink(symlink.first, symlink.second);
                     }
@@ -237,6 +252,377 @@ final class TermuxInstaller {
                 }
             }
         }.start();
+    }
+
+    private static boolean isInstalledBootstrapCompatible() {
+        if (DEFAULT_TERMUX_PACKAGE_NAME.equals(TermuxConstants.TERMUX_PACKAGE_NAME)) return true;
+
+        File loginFile = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "login");
+        if (!loginFile.isFile()) return false;
+
+        try (FileInputStream inStream = new FileInputStream(loginFile)) {
+            byte[] buffer = new byte[512];
+            int readBytes = inStream.read(buffer);
+            if (readBytes < 0) return false;
+
+            String start = new String(buffer, 0, readBytes, StandardCharsets.UTF_8);
+            if (start.contains(DEFAULT_TERMUX_DATA_DIR_PATH) ||
+                !start.contains(TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH))
+                return false;
+
+            File dpkgWrapperFile = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "dpkg");
+            File dpkgRealFile = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "dpkg.real");
+            if (!dpkgRealFile.isFile() || !doesFileContain(dpkgWrapperFile, "TERMUXY_DPKG_WRAPPER"))
+                return false;
+
+            File aptHookFile = new File(TermuxConstants.TERMUX_ETC_PREFIX_DIR_PATH,
+                "apt/apt.conf.d/00termuxy-pathfix");
+            File aptHookScriptFile = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH,
+                "termuxy-fix-deb-paths");
+            if (!doesFileContain(aptHookFile, "termuxy-fix-deb-paths") ||
+                !doesFileContain(aptHookScriptFile, "TERMUXY_FIX_DEB_PATHS"))
+                return false;
+
+            File keyringLink = new File(TermuxConstants.TERMUX_ETC_PREFIX_DIR_PATH,
+                "apt/trusted.gpg.d/grimler.gpg");
+            if (keyringLink.exists()) {
+                String keyringTarget = Os.readlink(keyringLink.getAbsolutePath());
+                return !keyringTarget.contains(DEFAULT_TERMUX_DATA_DIR_PATH) &&
+                    keyringTarget.contains(TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH);
+            }
+
+            return !start.contains(DEFAULT_TERMUX_DATA_DIR_PATH) &&
+                start.contains(TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to check bootstrap compatibility", e);
+            return false;
+        }
+    }
+
+    private static void patchBootstrapFile(File targetFile) {
+        if (DEFAULT_TERMUX_PACKAGE_NAME.equals(TermuxConstants.TERMUX_PACKAGE_NAME)) return;
+
+        try {
+            byte[] bytes;
+            try (FileInputStream inStream = new FileInputStream(targetFile);
+                 ByteArrayOutputStream outStream = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[8096];
+                int readBytes;
+                while ((readBytes = inStream.read(buffer)) != -1) {
+                    outStream.write(buffer, 0, readBytes);
+                }
+                bytes = outStream.toByteArray();
+            }
+
+            byte[] search = DEFAULT_TERMUX_DATA_DIR_PATH.getBytes(StandardCharsets.UTF_8);
+            byte[] replacement = TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH.getBytes(StandardCharsets.UTF_8);
+
+            if (search.length == replacement.length && replaceBytes(bytes, search, replacement)) {
+                try (FileOutputStream outStream = new FileOutputStream(targetFile, false)) {
+                    outStream.write(bytes);
+                }
+                return;
+            }
+
+            if (!isLikelyTextFile(bytes)) return;
+
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            if (!text.contains(DEFAULT_TERMUX_DATA_DIR_PATH)) return;
+
+            text = patchBootstrapPath(text);
+
+            try (FileOutputStream outStream = new FileOutputStream(targetFile, false)) {
+                outStream.write(text.getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to patch bootstrap file \"" + targetFile + "\"", e);
+        }
+    }
+
+    private static boolean doesFileContain(File file, String needle) {
+        if (!file.isFile()) return false;
+
+        try (FileInputStream inStream = new FileInputStream(file);
+             ByteArrayOutputStream outStream = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8096];
+            int readBytes;
+            while ((readBytes = inStream.read(buffer)) != -1) {
+                outStream.write(buffer, 0, readBytes);
+            }
+            return new String(outStream.toByteArray(), StandardCharsets.UTF_8).contains(needle);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to read file \"" + file + "\"", e);
+            return false;
+        }
+    }
+
+    static boolean repairExistingBootstrapIfNeeded() {
+        if (DEFAULT_TERMUX_PACKAGE_NAME.equals(TermuxConstants.TERMUX_PACKAGE_NAME)) return true;
+
+        try {
+            installDpkgWrapperIfNeeded(TERMUX_PREFIX_DIR);
+            installAptPathFixHookIfNeeded(TERMUX_PREFIX_DIR);
+            return true;
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to repair existing bootstrap", e);
+            return false;
+        }
+    }
+
+    private static void installDpkgWrapperIfNeeded(File prefixDir) throws Exception {
+        if (DEFAULT_TERMUX_PACKAGE_NAME.equals(TermuxConstants.TERMUX_PACKAGE_NAME)) return;
+
+        File dpkgFile = new File(prefixDir, "bin/dpkg");
+        File dpkgRealFile = new File(prefixDir, "bin/dpkg.real");
+        if (!dpkgFile.isFile()) return;
+
+        boolean dpkgFileIsWrapper = doesFileContain(dpkgFile, "TERMUXY_DPKG_WRAPPER");
+        if (!dpkgFileIsWrapper) {
+            if (dpkgRealFile.isFile() && !dpkgRealFile.delete())
+                throw new RuntimeException("Failed to replace stale dpkg.real");
+            if (!dpkgFile.renameTo(dpkgRealFile))
+                throw new RuntimeException("Failed to move dpkg binary to dpkg.real");
+        }
+
+        if (!dpkgRealFile.isFile())
+            throw new RuntimeException("Missing dpkg.real for dpkg wrapper");
+
+        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        String appDataDir = TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH;
+        String script = "#!" + prefix + "/bin/bash\n" +
+            "# TERMUXY_DPKG_WRAPPER\n" +
+            "set -e\n" +
+            "PREFIX=\"" + prefix + "\"\n" +
+            "OLD=\"" + DEFAULT_TERMUX_DATA_DIR_PATH + "\"\n" +
+            "NEW=\"" + appDataDir + "\"\n" +
+            "REAL=\"$PREFIX/bin/dpkg.real\"\n" +
+            "TMPBASE=\"${TMPDIR:-$PREFIX/tmp}/termuxy-dpkg-$$\"\n" +
+            "mkdir -p \"$TMPBASE\"\n" +
+            "cleanup() { rm -rf \"$TMPBASE\"; }\n" +
+            "trap cleanup EXIT INT TERM\n" +
+            "rewrite_deb() {\n" +
+            "  local deb=\"$1\"\n" +
+            "  local name extract out\n" +
+            "  name=\"$(basename \"$deb\")\"\n" +
+            "  extract=\"$TMPBASE/extract-${#patched_args[@]}\"\n" +
+            "  out=\"$TMPBASE/$name\"\n" +
+            "  mkdir -p \"$extract\"\n" +
+            "  \"$PREFIX/bin/dpkg-deb\" -R \"$deb\" \"$extract\"\n" +
+            "  if [ -d \"$extract/data/data/com.termux\" ]; then\n" +
+            "    mkdir -p \"$extract/data/data\"\n" +
+            "    rm -rf \"$extract/data/data/io.termuxy\"\n" +
+            "    mv \"$extract/data/data/com.termux\" \"$extract/data/data/io.termuxy\"\n" +
+            "  fi\n" +
+            "  while IFS= read -r link; do\n" +
+            "    local target patched\n" +
+            "    target=\"$(readlink \"$link\")\"\n" +
+            "    patched=\"${target//$OLD/$NEW}\"\n" +
+            "    if [ \"$target\" != \"$patched\" ]; then\n" +
+            "      ln -sfn \"$patched\" \"$link\"\n" +
+            "    fi\n" +
+            "  done < <(find \"$extract\" -type l)\n" +
+            "  find \"$extract\" -type f -exec sed -i \"s|$OLD|$NEW|g\" {} + 2>/dev/null || true\n" +
+            "  if [ -d \"$extract/DEBIAN\" ]; then\n" +
+            "    find \"$extract/DEBIAN\" -type f \\( -name preinst -o -name postinst -o -name prerm -o -name postrm -o -name config \\) -exec chmod 755 {} +\n" +
+            "    find \"$extract/DEBIAN\" -type f ! \\( -name preinst -o -name postinst -o -name prerm -o -name postrm -o -name config \\) -exec chmod 644 {} +\n" +
+            "  fi\n" +
+            "  \"$PREFIX/bin/dpkg-deb\" -b \"$extract\" \"$out\" >/dev/null\n" +
+            "  printf '%s\\n' \"$out\"\n" +
+            "}\n" +
+            "patched_args=()\n" +
+            "for arg in \"$@\"; do\n" +
+            "  if [[ \"$arg\" == *.deb && -f \"$arg\" ]]; then\n" +
+            "    patched_args+=(\"$(rewrite_deb \"$arg\")\")\n" +
+            "  else\n" +
+            "    patched_args+=(\"$arg\")\n" +
+            "  fi\n" +
+            "done\n" +
+            "exec \"$REAL\" \"${patched_args[@]}\"\n";
+
+        try (FileOutputStream outStream = new FileOutputStream(dpkgFile, false)) {
+            outStream.write(script.getBytes(StandardCharsets.UTF_8));
+        }
+
+        //noinspection OctalInteger
+        Os.chmod(dpkgFile.getAbsolutePath(), 0700);
+        //noinspection OctalInteger
+        Os.chmod(dpkgRealFile.getAbsolutePath(), 0700);
+
+        installAptPathFixHookIfNeeded(prefixDir);
+    }
+
+    private static void installAptPathFixHookIfNeeded(File prefixDir) throws Exception {
+        if (DEFAULT_TERMUX_PACKAGE_NAME.equals(TermuxConstants.TERMUX_PACKAGE_NAME)) return;
+
+        File binDir = new File(prefixDir, "bin");
+        File aptConfDir = new File(prefixDir, "etc/apt/apt.conf.d");
+        File profileDir = new File(prefixDir, "etc/profile.d");
+        Error error = ensureDirectoryExists(binDir);
+        if (error != null) throw new RuntimeException(Error.getMinimalErrorString(error));
+        error = ensureDirectoryExists(aptConfDir);
+        if (error != null) throw new RuntimeException(Error.getMinimalErrorString(error));
+        error = ensureDirectoryExists(profileDir);
+        if (error != null) throw new RuntimeException(Error.getMinimalErrorString(error));
+
+        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        String hookFilePath = prefix + "/etc/apt/apt.conf.d/00termuxy-pathfix";
+        String hookScriptPath = prefix + "/bin/termuxy-fix-deb-paths";
+        String script = "#!" + prefix + "/bin/bash\n" +
+            "# TERMUXY_FIX_DEB_PATHS\n" +
+            "set -e\n" +
+            "PREFIX=\"" + prefix + "\"\n" +
+            "OLD=\"" + DEFAULT_TERMUX_DATA_DIR_PATH + "\"\n" +
+            "NEW=\"" + TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH + "\"\n" +
+            "TMPBASE=\"${TMPDIR:-$PREFIX/tmp}/termuxy-apt-pathfix-$$\"\n" +
+            "mkdir -p \"$TMPBASE\"\n" +
+            "cleanup() { rm -rf \"$TMPBASE\"; }\n" +
+            "trap cleanup EXIT INT TERM\n" +
+            "fix_deb() {\n" +
+            "  local deb=\"$1\"\n" +
+            "  local work out target patched\n" +
+            "  [ -f \"$deb\" ] || return 0\n" +
+            "  \"$PREFIX/bin/dpkg-deb\" -c \"$deb\" 2>/dev/null | grep -q 'data/data/com\\.termux' || return 0\n" +
+            "  work=\"$TMPBASE/$(basename \"$deb\").d\"\n" +
+            "  out=\"$TMPBASE/$(basename \"$deb\")\"\n" +
+            "  rm -rf \"$work\"\n" +
+            "  mkdir -p \"$work\"\n" +
+            "  \"$PREFIX/bin/dpkg-deb\" -R \"$deb\" \"$work\"\n" +
+            "  if [ -d \"$work/data/data/com.termux\" ]; then\n" +
+            "    mkdir -p \"$work/data/data\"\n" +
+            "    rm -rf \"$work/data/data/io.termuxy\"\n" +
+            "    mv \"$work/data/data/com.termux\" \"$work/data/data/io.termuxy\"\n" +
+            "  fi\n" +
+            "  while IFS= read -r link; do\n" +
+            "    target=\"$(readlink \"$link\")\"\n" +
+            "    patched=\"${target//$OLD/$NEW}\"\n" +
+            "    if [ \"$target\" != \"$patched\" ]; then\n" +
+            "      ln -sfn \"$patched\" \"$link\"\n" +
+            "    fi\n" +
+            "  done < <(find \"$work\" -type l)\n" +
+            "  find \"$work\" -type f -exec sed -i \"s|$OLD|$NEW|g\" {} + 2>/dev/null || true\n" +
+            "  if [ -d \"$work/DEBIAN\" ]; then\n" +
+            "    find \"$work/DEBIAN\" -type f \\( -name preinst -o -name postinst -o -name prerm -o -name postrm -o -name config \\) -exec chmod 755 {} +\n" +
+            "    find \"$work/DEBIAN\" -type f ! \\( -name preinst -o -name postinst -o -name prerm -o -name postrm -o -name config \\) -exec chmod 644 {} +\n" +
+            "  fi\n" +
+            "  \"$PREFIX/bin/dpkg-deb\" -b \"$work\" \"$out\" >/dev/null\n" +
+            "  cat \"$out\" > \"$deb\"\n" +
+            "}\n" +
+            "if [ \"${1:-}\" = \"--stdin\" ]; then\n" +
+            "  while IFS= read -r deb; do\n" +
+            "    fix_deb \"$deb\"\n" +
+            "  done\n" +
+            "fi\n" +
+            "shopt -s nullglob\n" +
+            "for deb in \"$PREFIX\"/tmp/apt-dpkg-install-*/*.deb \"$PREFIX\"/var/cache/apt/archives/*.deb; do\n" +
+            "  fix_deb \"$deb\"\n" +
+            "done\n";
+
+        File hookScriptFile = new File(binDir, "termuxy-fix-deb-paths");
+        try (FileOutputStream outStream = new FileOutputStream(hookScriptFile, false)) {
+            outStream.write(script.getBytes(StandardCharsets.UTF_8));
+        }
+        //noinspection OctalInteger
+        Os.chmod(hookScriptFile.getAbsolutePath(), 0700);
+
+        String hook = "DPkg::Pre-Install-Pkgs { \"" + hookScriptPath + " --stdin\"; };\n";
+        File hookFile = new File(aptConfDir, "00termuxy-pathfix");
+        try (FileOutputStream outStream = new FileOutputStream(hookFile, false)) {
+            outStream.write(hook.getBytes(StandardCharsets.UTF_8));
+        }
+
+        installCommandAutohealWrapperIfNeeded(prefixDir, "apt", "TERMUXY_APT_WRAPPER");
+        installCommandAutohealWrapperIfNeeded(prefixDir, "pkg", "TERMUXY_PKG_WRAPPER");
+
+        String autoHealScript = "#!" + prefix + "/bin/bash\n" +
+            "# TERMUXY_AUTOHEAL\n" +
+            "set -e\n" +
+            "PREFIX=\"" + prefix + "\"\n" +
+            "HOOK=\"" + hookFilePath + "\"\n" +
+            "FIXER=\"" + hookScriptPath + "\"\n" +
+            "mkdir -p \"$PREFIX/etc/apt/apt.conf.d\"\n" +
+            "if [ -x \"$FIXER\" ]; then\n" +
+            "  printf 'DPkg::Pre-Install-Pkgs { \"%s --stdin\"; };\\n' \"$FIXER\" > \"$HOOK\"\n" +
+            "  \"$FIXER\" >/dev/null 2>&1 || true\n" +
+            "fi\n";
+        File autoHealFile = new File(binDir, "termuxy-autoheal");
+        try (FileOutputStream outStream = new FileOutputStream(autoHealFile, false)) {
+            outStream.write(autoHealScript.getBytes(StandardCharsets.UTF_8));
+        }
+        //noinspection OctalInteger
+        Os.chmod(autoHealFile.getAbsolutePath(), 0700);
+
+        String profile = "if [ -x \"" + prefix + "/bin/termuxy-autoheal\" ]; then\n" +
+            "  \"" + prefix + "/bin/termuxy-autoheal\" >/dev/null 2>&1 || true\n" +
+            "fi\n";
+        File profileFile = new File(profileDir, "00-termuxy-autoheal.sh");
+        try (FileOutputStream outStream = new FileOutputStream(profileFile, false)) {
+            outStream.write(profile.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    private static void installCommandAutohealWrapperIfNeeded(File prefixDir, String commandName, String marker) throws Exception {
+        File commandFile = new File(prefixDir, "bin/" + commandName);
+        File realFile = new File(prefixDir, "bin/" + commandName + ".real");
+        if (!commandFile.isFile()) return;
+
+        if (!doesFileContain(commandFile, marker)) {
+            if (realFile.isFile() && !realFile.delete())
+                throw new RuntimeException("Failed to replace stale " + commandName + ".real");
+            if (!commandFile.renameTo(realFile))
+                throw new RuntimeException("Failed to move " + commandName + " to " + commandName + ".real");
+        }
+
+        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        String script = "#!" + prefix + "/bin/bash\n" +
+            "# " + marker + "\n" +
+            "set -e\n" +
+            "PREFIX=\"" + prefix + "\"\n" +
+            "[ -x \"$PREFIX/bin/termuxy-autoheal\" ] && \"$PREFIX/bin/termuxy-autoheal\" >/dev/null 2>&1 || true\n" +
+            "exec \"$PREFIX/bin/" + commandName + ".real\" \"$@\"\n";
+
+        try (FileOutputStream outStream = new FileOutputStream(commandFile, false)) {
+            outStream.write(script.getBytes(StandardCharsets.UTF_8));
+        }
+        //noinspection OctalInteger
+        Os.chmod(commandFile.getAbsolutePath(), 0700);
+        //noinspection OctalInteger
+        Os.chmod(realFile.getAbsolutePath(), 0700);
+    }
+
+    private static String patchBootstrapPath(String value) {
+        if (DEFAULT_TERMUX_PACKAGE_NAME.equals(TermuxConstants.TERMUX_PACKAGE_NAME)) return value;
+        return value.replace(DEFAULT_TERMUX_DATA_DIR_PATH,
+            TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH);
+    }
+
+    private static boolean replaceBytes(byte[] bytes, byte[] search, byte[] replacement) {
+        boolean replaced = false;
+
+        for (int i = 0; i <= bytes.length - search.length; i++) {
+            boolean matched = true;
+            for (int j = 0; j < search.length; j++) {
+                if (bytes[i + j] != search[j]) {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if (matched) {
+                System.arraycopy(replacement, 0, bytes, i, replacement.length);
+                replaced = true;
+                i += search.length - 1;
+            }
+        }
+
+        return replaced;
+    }
+
+    private static boolean isLikelyTextFile(byte[] bytes) {
+        int length = Math.min(bytes.length, 4096);
+        for (int i = 0; i < length; i++) {
+            if (bytes[i] == 0) return false;
+        }
+        return true;
     }
 
     public static void showBootstrapErrorDialog(Activity activity, Runnable whenDone, String message) {

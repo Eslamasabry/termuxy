@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!DOCTYPE resources [
-    <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
-    <!ENTITY TERMUX_APP_NAME "Termux">
-    <!ENTITY TERMUX_API_APP_NAME "Termux:API">
-    <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
-    <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
-    <!ENTITY TERMUX_STYLING_APP_NAME "Termux:Styling">
-    <!ENTITY TERMUX_TASKER_APP_NAME "Termux:Tasker">
-    <!ENTITY TERMUX_WIDGET_APP_NAME "Termux:Widget">
+    <!ENTITY TERMUX_PACKAGE_NAME "io.termuxy">
+    <!ENTITY TERMUX_APP_NAME "Termuxy">
+    <!ENTITY TERMUX_API_APP_NAME "Termuxy:API">
+    <!ENTITY TERMUX_BOOT_APP_NAME "Termuxy:Boot">
+    <!ENTITY TERMUX_FLOAT_APP_NAME "Termuxy:Float">
+    <!ENTITY TERMUX_STYLING_APP_NAME "Termuxy:Styling">
+    <!ENTITY TERMUX_TASKER_APP_NAME "Termuxy:Tasker">
+    <!ENTITY TERMUX_WIDGET_APP_NAME "Termuxy:Widget">
     ]>
 
 <resources>
@@ -53,9 +53,67 @@
     <string name="action_create_named_session_confirm">Create</string>
 
     <string name="action_toggle_soft_keyboard">Keyboard</string>
+    <string name="termuxy_command_center_title">Termuxy</string>
+    <string name="termuxy_command_center_subtitle">Agent cockpit</string>
+    <string name="action_voice_input">Voice input</string>
+    <string name="action_start_coding_mode">Linux Workspace</string>
+    <string name="action_agent_prompt">Agent Prompt</string>
+    <string name="action_send_to_agent">Send</string>
+    <string name="action_repair_packages">Repair Packages</string>
+    <string name="action_tmux_prefix">^B</string>
+    <string name="action_tmux_split_vertical">|</string>
+    <string name="action_tmux_split_horizontal">-</string>
+    <string name="action_tmux_new_window">+</string>
+    <string name="action_tmux_choose_session">S</string>
+    <string name="action_agent_approve">Yes</string>
+    <string name="action_agent_deny">No</string>
+    <string name="action_agent_escape">ESC</string>
+    <string name="action_agent_interrupt">^C</string>
+
+    <!-- Termuxy Cockpit: Servers -->
+    <string name="action_servers">Servers</string>
+    <string name="termuxy_servers_title">Connect to a server</string>
+    <string name="termuxy_servers_add">Add server</string>
+    <string name="termuxy_servers_edit">Edit</string>
+    <string name="termuxy_servers_delete">Delete</string>
+    <string name="termuxy_servers_required">Host and user are required</string>
+    <string name="termuxy_terminal_not_ready">Terminal not ready</string>
+    <string name="termuxy_servers_hint_name">Name (e.g. Home lab)</string>
+    <string name="termuxy_servers_hint_user">User</string>
+    <string name="termuxy_servers_hint_host">Host or IP</string>
+    <string name="termuxy_servers_hint_port">Port (22)</string>
+    <string name="termuxy_servers_hint_key">SSH key path (optional, e.g. ~/.ssh/id_ed25519)</string>
+    <string name="termuxy_servers_hint_password">Password (optional, auto-entered via sshpass)</string>
+    <string name="termuxy_servers_hint_tmux">tmux session name (termuxy)</string>
+    <string name="termuxy_servers_hint_mosh">Use mosh (resilient roaming)</string>
 
     <string name="msg_enabling_terminal_toolbar">Enabling Terminal Toolbar</string>
     <string name="msg_disabling_terminal_toolbar">Disabling Terminal Toolbar</string>
+    <string name="msg_voice_input_listening">Listening for voice input</string>
+    <string name="msg_voice_input_inserted">Voice input inserted</string>
+    <string name="msg_voice_input_permission_not_granted">Microphone permission not granted</string>
+    <string name="msg_voice_input_recognizer_unavailable">Speech recognition is not available on this device</string>
+    <string name="msg_voice_input_on_device_unavailable">On-device speech recognition is not available; using offline-preferred system recognition</string>
+    <string name="msg_voice_input_no_match">No speech recognized</string>
+    <string name="msg_voice_input_error">Voice input failed: %1$s</string>
+    <string name="msg_package_manager_repaired">Package manager repaired</string>
+    <string name="msg_package_manager_repair_failed">Package manager repair failed</string>
+
+    <!-- Termuxy Cockpit: Voice mode -->
+    <string name="action_voice_mode">Voice Mode</string>
+    <string name="msg_voice_mode_on">Voice mode on — speak to your agent</string>
+    <string name="msg_voice_mode_off">Voice mode off</string>
+    <string name="msg_voice_mode_sent">Sent: %1$s</string>
+    <string name="msg_voice_mode_no_session">No active session to send to</string>
+    <string name="termuxy_voice_listening">Listening…</string>
+    <string name="termuxy_voice_transcribing">Transcribing…</string>
+    <string name="termuxy_voice_hint">Speak your instruction</string>
+    <string name="termuxy_voice_heard">Heard: %1$s</string>
+    <string name="termuxy_voice_stop">Stop</string>
+    <string name="termuxy_voice_model_down">On-device model not running</string>
+    <string name="termuxy_voice_setup">Set up model</string>
+    <string name="termuxy_voice_system">Use system voice</string>
+    <string name="termuxy_voice_setup_started">Installing whisper.cpp in the Linux workspace — this takes a while. Watch the terminal.</string>
 
 
 
