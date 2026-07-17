@@ -145,13 +145,16 @@ public class ServerConnector {
     private String buildKeyInstallCommand(@NonNull Server server) {
         int port = server.port > 0 ? server.port : 22;
         String target = server.user + "@" + server.host;
+        // NOTE: do NOT pipe the pubkey via ssh stdin — sshpass allocates a pty that overrides ssh's
+        // stdin, so the remote `cat` would get nothing. Embed the pubkey in the remote command
+        // instead (expanded locally by the phone shell inside double quotes).
         return "set -e; KEY=\"$HOME/.ssh/termuxy_ed25519\"; mkdir -p \"$HOME/.ssh\"; "
                 + "[ -f \"$KEY\" ] || ssh-keygen -t ed25519 -f \"$KEY\" -N \"\" -C termuxy; "
                 + "{ command -v sshpass >/dev/null 2>&1 || pkg install -y sshpass; }; "
+                + "PUB=\"$(cat \"$KEY.pub\")\"; "
                 + "sshpass -p " + shellQuote(server.password)
                 + " ssh -o StrictHostKeyChecking=accept-new -p " + port + " " + shellQuote(target)
-                + " 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'"
-                + " < \"$KEY.pub\"; "
+                + " \"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo \\\"$PUB\\\" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys\"; "
                 + "echo 'TERMUXY_KEY_INSTALLED '\"$KEY\"";
     }
 
