@@ -118,6 +118,22 @@ public class ServersDialog {
                     dialog.dismiss();
                 }));
 
+        form.findViewById(R.id.server_install_key).setOnClickListener(v -> {
+            Server built = buildFromForm(editing, name, host, port, user, key, password, tmux, mosh);
+            if (built == null) return;
+            built.keyPath = ServerConnector.DEFAULT_KEY_PATH; // force the on-device key path
+            List<Server> current = (list != null) ? list : ServerStore.load(mActivity);
+            if (editing != null) {
+                int idx = current.indexOf(editing);
+                if (idx >= 0) current.set(idx, built); else current.add(built);
+            } else {
+                current.add(built);
+            }
+            ServerStore.save(mActivity, current);
+            dialog.dismiss();
+            new ServerConnector(mActivity).installKey(built);
+        });
+
         dialog.show();
     }
 

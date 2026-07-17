@@ -86,6 +86,8 @@
     <string name="termuxy_servers_hint_password">Password (optional, auto-entered via sshpass)</string>
     <string name="termuxy_servers_hint_tmux">tmux session name (termuxy)</string>
     <string name="termuxy_servers_hint_mosh">Use mosh (resilient roaming)</string>
+    <string name="termuxy_servers_install_key">Install key login (passwordless)</string>
+    <string name="termuxy_servers_need_password_for_key">Enter the password first to install a key</string>
 
     <string name="msg_enabling_terminal_toolbar">Enabling Terminal Toolbar</string>
     <string name="msg_disabling_terminal_toolbar">Disabling Terminal Toolbar</string>

@@ -78,5 +78,13 @@
             android:layout_marginTop="8dp"
             android:text="@string/termuxy_servers_hint_mosh" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/server_install_key"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/termuxy_servers_install_key" />
+
     </LinearLayout>
 </ScrollView>
