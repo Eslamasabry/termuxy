@@ -107,7 +107,7 @@ public class ServerConnector {
                 ? "termuxy" : server.tmuxSession;
         String target = server.user + "@" + server.host;
 
-        boolean useKey = server.keyPath != null && !server.keyPath.isEmpty();
+        boolean useKey = keyFileExists(server.keyPath);
         boolean usePassword = !useKey && server.password != null && !server.password.isEmpty();
 
         // Base ssh flags (shared by ssh and the mosh --ssh wrapper).
@@ -148,7 +148,10 @@ public class ServerConnector {
         // NOTE: do NOT pipe the pubkey via ssh stdin — sshpass allocates a pty that overrides ssh's
         // stdin, so the remote `cat` would get nothing. Embed the pubkey in the remote command
         // instead (expanded locally by the phone shell inside double quotes).
-        return "set -e; KEY=\"$HOME/.ssh/termuxy_ed25519\"; mkdir -p \"$HOME/.ssh\"; "
+        // Ensure openssh is present first — ssh-keygen and ssh both live in it, and it may not be
+        // installed yet on a fresh termuxy.
+        return "set -e; { command -v ssh-keygen >/dev/null 2>&1 || pkg install -y openssh; }; "
+                + "KEY=\"$HOME/.ssh/termuxy_ed25519\"; mkdir -p \"$HOME/.ssh\"; "
                 + "[ -f \"$KEY\" ] || ssh-keygen -t ed25519 -f \"$KEY\" -N \"\" -C termuxy; "
                 + "{ command -v sshpass >/dev/null 2>&1 || pkg install -y sshpass; }; "
                 + "PUB=\"$(cat \"$KEY.pub\")\"; "
@@ -156,6 +159,19 @@ public class ServerConnector {
                 + " ssh -o StrictHostKeyChecking=accept-new -p " + port + " " + shellQuote(target)
                 + " \"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo \\\"$PUB\\\" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys\"; "
                 + "echo 'TERMUXY_KEY_INSTALLED '\"$KEY\"";
+    }
+
+    /** Resolves a {@code ~}-prefixed path against the termuxy home and checks the key exists. */
+    private boolean keyFileExists(String keyPath) {
+        if (keyPath == null || keyPath.isEmpty()) return false;
+        String resolved = keyPath.startsWith("~")
+                ? "/data/data/io.termuxy/files/home" + keyPath.substring(1)
+                : keyPath;
+        try {
+            return new java.io.File(resolved).exists();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @NonNull
